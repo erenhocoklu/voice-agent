@@ -9,11 +9,14 @@ Usage:
 import os
 import json
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from google import genai
 from google.genai import types
 
 # ── Config ──────────────────────────────────────────────────────────────────
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDlZIbgKsuDtf71TNPh4EzFFSsXrl9ZXgU")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 MODEL = "gemini-2.5-flash"
 PROMT_FILE ="PromtCounter.json"
 
