@@ -8,6 +8,8 @@ Usage:
 
 import os
 import json
+import sounddevice as sd
+import numpy as np
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -15,9 +17,14 @@ load_dotenv()
 from google import genai
 from google.genai import types
 
+
+
+
+
 # ── Config ──────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 MODEL = "gemini-2.5-flash"
+SPEECH_MODEL = "gemini-2.5-flash-preview-tts"
 PROMT_FILE ="PromtCounter.json"
 
 MENU = """
@@ -89,7 +96,6 @@ def print_banner():
 {C.DIM}Type your order naturally. Type 'menu' to see options.
 Type 'quit' or 'exit' to leave.{C.RESET}
 """)
-
 def print_menu():
     print(f"\n{C.CYAN}{C.BOLD}━━━ OUR MENU ━━━{C.RESET}")
     print(MENU)
@@ -105,6 +111,24 @@ def save_balance(balance: int):
         json.dump({"PromtCount": balance}, f)
 def print_promt_stats(balance: int):
     print(f"{C.RED}Promts remaning: {balance}")
+
+def speak(text: str, client):
+    # the gemini client object for perhaps changing it in the future
+
+    response = client.models.generate_content(
+        model=SPEECH_MODEL,
+        config=types.GenerateContentConfig(
+            response_modalities=["AUDIO"],
+            speech_config=types.SpeechConfig(   voice_config=types.VoiceConfig(   prebuilt_voice_config=types.PrebuiltVoiceConfig(  voice_name="Puck"  )))
+        ),
+        contents=text,
+    )
+
+    audio_data = response.candidates[0].content.parts[0].inline_data.data
+    audio_array = np.frombuffer(audio_data, dtype=np.int16) # we need this to convert raw audip bytes into numpy 16 bit array so it can play the thing
+
+    sd.play(audio_array, samplerate = 24000)
+    sd.wait()
 
 
 
@@ -140,10 +164,12 @@ def run():
     # Opening message from AI
     reply = send("The customer just walked up to the counter. Greet them and take their order.")
     print(f"\n{C.GREEN}{C.BOLD}QuickBite:{C.RESET} {reply}\n")
+    speak(reply, client)
 
     while True:
         try:
             user_input = input(f"{C.YELLOW}{C.BOLD}You:{C.RESET} ").strip()
+
         except (KeyboardInterrupt, EOFError):
             print(f"\n\n{C.DIM}Session ended. Goodbye!{C.RESET}\n")
             break
@@ -153,18 +179,22 @@ def run():
 
         if user_input.lower() in ("quit", "exit", "bye"):
             print(f"\n{C.DIM}Thanks for visiting QuickBite! 👋{C.RESET}\n")
+            speak(reply, client)
             break
 
         if user_input.lower() == "menu":
             print_menu()
+            speak(reply, client)
             continue
 
         # Send to Gemini
         try:
             reply = send(user_input)
             print(f"\n{C.GREEN}{C.BOLD}QuickBite:{C.RESET} {reply}\n")
+            speak(reply, client)
 
             print_promt_stats(PromtCount)
+
         except Exception as e:
             print(f"\n{C.RED}Error talking to Gemini: {e}{C.RESET}\n")
             print("Make sure your GEMINI_API_KEY is set correctly.\n")
