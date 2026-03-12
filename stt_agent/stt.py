@@ -1,5 +1,6 @@
 import sounddevice as sd
 import numpy as np
+import time as time_module
 import tempfile
 import os
 
@@ -10,8 +11,9 @@ from faster_whisper import WhisperModel
 
 
 SAMPLE_RATE = 16000
-SILENCE_THRESHOLD = 0.1 # HOW QUIET SOUNDS AS SILENCE
-SILENCE_DURATION = 0.5 # SECONDS OF SILENCE BEFORE STOPPING
+SILENCE_THRESHOLD = 0.3 # HOW QUIET SOUNDS AS SILENCE
+SILENCE_DURATION = 2 # SECONDS OF SILENCE BEFORE STOPPING
+MIN_RECORD_DURATION = 2 # we need to record the silence first
 
 model = WhisperModel("small", device="cpu", compute_type="int8")
 
@@ -34,11 +36,17 @@ def listen() -> str:
         else:
             silent_chunks = 0
 
+    start_time = time_module.time()
+
+
     with sd.InputStream(samplerate=SAMPLE_RATE, blocksize=chunk_size, callback=callback, channels=1): # channels=1 since 1 audio is taken,
     # callback tells sounddevice to callback everytime a chunk arrives
     # sd.InputStrea opens the microphone from our settings
-        while silent_chunks < silence_limit:
+        while True:
             sd.sleep(100)
+            elapsed = time_module.time() - start_time
+            if elapsed >= MIN_RECORD_DURATION and silent_chunks >= silence_limit:
+                break
 
     print("Processing...")
 
@@ -52,7 +60,14 @@ def listen() -> str:
     segments, _ = model.transcribe(temp_path, language="tr") # tells whisper to expect turkish, improves accuracy significantly
     os.unlink(temp_path) # deletes the temp file
 
+    HALLUCINATIONS = ["altyazı", "m.k.", "subtitle", "subtitles", "teşekkürler"]
+
     text = " ".join(segment.text for segment in segments).strip()
+
+    if not text or any(h in text.lower() for h in HALLUCINATIONS):
+        print("🔇 No speech detected, listening again...")
+        return listen()
+
     print(f"you said: {C.YELLOW}{text}{C.RESET}")
     return text
 
